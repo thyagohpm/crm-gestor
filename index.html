@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRM Avançado com IA | Gestor de Tráfego</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Chart.js para os gráficos -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+
+    <!-- Fontes do Google -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Ícones (Feather Icons) -->
+    <script src="https://unpkg.com/feather-icons"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f1f5f9; /* slate-100 */
+        }
+        .modal {
+            transition: opacity 0.25s ease;
+            z-index: 50;
+        }
+        .modal-active { opacity: 1; pointer-events: auto; }
+        .modal-inactive { opacity: 0; pointer-events: none; }
+        .kanban-column { min-height: 400px; }
+        .kanban-card { cursor: grab; }
+        .kanban-card:active { cursor: grabbing; }
+        .dragging { opacity: 0.5; }
+        .drag-over { border-color: #0ea5e9; background-color: #f0f9ff; }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f8fafc; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .gemini-summary {
+            background: linear-gradient(to right, #e0f2fe, #f0f9ff);
+            border-left: 4px solid #0ea5e9;
+        }
+    </style>
+</head>
+<body class="antialiased text-slate-800">
+
+    <div id="loading-overlay" class="fixed inset-0 bg-slate-100 bg-opacity-80 flex items-center justify-center z-50">
+        <div class="text-center">
+            <svg class="animate-spin h-10 w-10 text-sky-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+            <p class="mt-4 text-lg font-medium text-slate-700">Carregando CRM...</p>
+        </div>
+    </div>
+
+    <div class="container mx-auto p-4 md:p-6 lg:p-8 max-w-screen-2xl">
+        
+        <header class="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center">
+            <div>
+                <h1 class="text-3xl font-bold text-slate-900">CRM de Prospecção ✨</h1>
+                <p class="text-slate-500 mt-1">Organize seus leads, gerencie seu funil e bata suas metas com ajuda da IA.</p>
+            </div>
+            <div class="mt-4 sm:mt-0 text-xs text-slate-500 bg-white p-2 rounded-lg shadow-sm">
+                <span class="font-bold">Seu ID de Usuário:</span>
+                <span id="userIdDisplay" class="break-all">...</span>
+            </div>
+        </header>
+
+        <main class="grid grid-cols-1 xl:grid-cols-4 gap-6">
+            
+            <div class="xl:col-span-1 space-y-6">
+                <div class="bg-white p-6 rounded-xl shadow-md">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-xl font-bold text-slate-900">Dashboard</h2>
+                        <button id="openReportsBtn" class="p-2 rounded-md hover:bg-slate-100 text-slate-500 hover:text-sky-600" title="Ver Relatórios"><i data-feather="bar-chart-2"></i></button>
+                    </div>
+                    <div id="dashboard-charts" class="grid grid-cols-2 gap-4 mt-4"></div>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-md">
+                    <h2 class="text-xl font-bold mb-4 text-slate-900">Definir Metas Mensais</h2>
+                    <div class="space-y-4">
+                        <div><label for="newLeadsTarget" class="block text-sm font-medium text-slate-700">Novos Leads</label><input type="number" id="newLeadsTarget" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500 sm:text-sm" placeholder="Ex: 20"></div>
+                        <div><label for="proposalsTarget" class="block text-sm font-medium text-slate-700">Propostas Enviadas</label><input type="number" id="proposalsTarget" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500 sm:text-sm" placeholder="Ex: 10"></div>
+                        <div><label for="closedDealsTarget" class="block text-sm font-medium text-slate-700">Clientes Fechados</label><input type="number" id="closedDealsTarget" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500 sm:text-sm" placeholder="Ex: 4"></div>
+                        <div><label for="revenueTarget" class="block text-sm font-medium text-slate-700">Receita (R$)</label><input type="number" id="revenueTarget" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500 sm:text-sm" placeholder="Ex: 5000"></div>
+                        <button id="saveGoalsBtn" class="w-full bg-sky-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-sky-700 transition-colors flex items-center justify-center"><i data-feather="save" class="mr-2 h-5 w-5"></i> Salvar Metas</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="xl:col-span-3 bg-white p-6 rounded-xl shadow-md">
+                <div class="flex flex-col md:flex-row justify-between md:items-center mb-4 gap-4">
+                    <div class="flex items-center gap-2 flex-grow">
+                        <div class="relative"><input type="text" id="searchInput" placeholder="Buscar por nome ou contato..." class="w-full md:w-64 pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-sky-500 focus:border-sky-500"><div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><i data-feather="search" class="text-slate-400 h-5 w-5"></i></div></div>
+                        <button id="clearFilterBtn" class="hidden items-center gap-1 text-sm text-red-600 bg-red-100 px-3 py-2 rounded-lg hover:bg-red-200"><i data-feather="x-circle" class="h-4 w-4"></i><span id="filterLabel"></span></button>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="flex items-center rounded-lg bg-slate-100 p-1"><button id="viewToggleList" class="px-3 py-1 text-sm rounded-md bg-white shadow text-sky-600"><i data-feather="list"></i></button><button id="viewToggleKanban" class="px-3 py-1 text-sm rounded-md text-slate-500"><i data-feather="trello"></i></button></div>
+                        <button id="addLeadBtn" class="bg-emerald-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-emerald-600 transition-colors flex items-center"><i data-feather="plus" class="mr-2 h-5 w-5"></i> Novo Lead</button>
+                    </div>
+                </div>
+                <div id="list-view-container" class="space-y-4 h-[calc(100vh-250px)] overflow-y-auto pr-2"></div>
+                <div id="kanban-view-container" class="hidden"><div id="kanban-board" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 overflow-x-auto pb-4"></div></div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <div id="leadModal" class="modal modal-inactive fixed inset-0 bg-slate-900 bg-opacity-50 flex items-center justify-center p-4"><div class="bg-white rounded-xl shadow-2xl p-8 w-full max-w-md transform transition-all"><h3 id="modalTitle" class="text-2xl font-bold text-slate-900 mb-4">Adicionar Novo Lead</h3><form id="leadForm" class="space-y-4"><input type="hidden" id="leadId"><div><label for="leadName" class="block text-sm font-medium text-slate-700">Nome da Empresa/Lead</label><input type="text" id="leadName" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm" required></div><div><label for="leadContact" class="block text-sm font-medium text-slate-700">Contato (Email)</label><input type="email" id="leadContact" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm" required></div><div><label for="leadPhone" class="block text-sm font-medium text-slate-700">Telefone</label><input type="tel" id="leadPhone" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm"></div><div><label for="leadPotentialValue" class="block text-sm font-medium text-slate-700">Valor Potencial (R$)</label><input type="number" id="leadPotentialValue" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm" required></div><div class="pt-4"><button type="submit" class="w-full bg-sky-600 text-white font-bold py-2.5 px-4 rounded-lg hover:bg-sky-700">Salvar Lead</button></div></form></div></div>
+    <div id="notesModal" class="modal modal-inactive fixed inset-0 bg-slate-900 bg-opacity-50 flex items-center justify-center p-4"><div class="bg-white rounded-xl shadow-2xl p-8 w-full max-w-lg transform transition-all"><div class="flex justify-between items-center"><h3 class="text-2xl font-bold text-slate-900">Histórico de Notas</h3><button class="close-modal-btn text-slate-400 hover:text-slate-600"><i data-feather="x"></i></button></div><div id="gemini-summary-container" class="mt-4"></div><div id="notes-history" class="mt-4 space-y-3 max-h-64 overflow-y-auto pr-2"></div><form id="addNoteForm" class="mt-6"><textarea id="noteText" class="w-full rounded-md border-slate-300" rows="3" placeholder="Adicionar nova anotação..." required></textarea><div class="flex gap-2 mt-2"><button type="submit" class="w-full bg-sky-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-sky-700">Adicionar Nota</button><button type="button" id="generateSummaryBtn" class="w-full bg-purple-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-purple-700 flex items-center justify-center">✨ Gerar Resumo com IA</button></div></form></div></div>
+    <div id="reportsModal" class="modal modal-inactive fixed inset-0 bg-slate-900 bg-opacity-50 flex items-center justify-center p-4"><div class="bg-white rounded-xl shadow-2xl p-8 w-full max-w-2xl transform transition-all"><div class="flex justify-between items-center"><h3 class="text-2xl font-bold text-slate-900">Relatórios Avançados</h3><button class="close-modal-btn text-slate-400 hover:text-slate-600"><i data-feather="x"></i></button></div><div id="reports-content" class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6"></div></div></div>
+    <div id="emailModal" class="modal modal-inactive fixed inset-0 bg-slate-900 bg-opacity-50 flex items-center justify-center p-4"><div class="bg-white rounded-xl shadow-2xl p-8 w-full max-w-2xl transform transition-all"><div class="flex justify-between items-center"><h3 class="text-2xl font-bold text-slate-900">Assistente de Email</h3><button class="close-modal-btn text-slate-400 hover:text-slate-600"><i data-feather="x"></i></button></div><div class="mt-4"><button id="generateEmailBtn" class="w-full bg-purple-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-purple-700 flex items-center justify-center mb-4">✨ Gerar Email de Follow-up com IA</button><textarea id="emailOutput" class="w-full h-64 p-2 border border-slate-300 rounded-md" placeholder="O email gerado pela IA aparecerá aqui..."></textarea><button id="copyEmailBtn" class="mt-2 w-full bg-slate-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-slate-700">Copiar Texto</button></div></div></div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, addDoc, updateDoc, deleteDoc, serverTimestamp, query, orderBy, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-crm-app';
+        let app, db, auth, userId;
+        let leads = [], goals = {}, charts = {}, currentView = 'list', currentLeadIdForNotes = null, currentLeadForEmail = null, activeFilter = null;
+        const statuses = ['Lead', 'Contato Realizado', 'Proposta Enviada', 'Negociação', 'Fechado', 'Perdido'];
+        
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const userIdDisplay = document.getElementById('userIdDisplay');
+        const dashboardChartsContainer = document.getElementById('dashboard-charts');
+        const saveGoalsBtn = document.getElementById('saveGoalsBtn');
+        const addLeadBtn = document.getElementById('addLeadBtn');
+        const searchInput = document.getElementById('searchInput');
+        const clearFilterBtn = document.getElementById('clearFilterBtn');
+        const filterLabel = document.getElementById('filterLabel');
+        const listViewContainer = document.getElementById('list-view-container');
+        const kanbanViewContainer = document.getElementById('kanban-view-container');
+        const kanbanBoard = document.getElementById('kanban-board');
+        const viewToggleList = document.getElementById('viewToggleList');
+        const viewToggleKanban = document.getElementById('viewToggleKanban');
+        const leadModal = document.getElementById('leadModal');
+        const notesModal = document.getElementById('notesModal');
+        const reportsModal = document.getElementById('reportsModal');
+        const emailModal = document.getElementById('emailModal');
+        const leadForm = document.getElementById('leadForm');
+        const addNoteForm = document.getElementById('addNoteForm');
+        const openReportsBtn = document.getElementById('openReportsBtn');
+        const generateSummaryBtn = document.getElementById('generateSummaryBtn');
+        const generateEmailBtn = document.getElementById('generateEmailBtn');
+        const copyEmailBtn = document.getElementById('copyEmailBtn');
+        const emailOutput = document.getElementById('emailOutput');
+
+        const formatCurrency = (value) => `R$ ${Number(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        const formatDate = (timestamp) => timestamp ? new Date(timestamp.seconds * 1000).toLocaleString('pt-BR') : 'N/A';
+        const openModal = (modal) => { modal.classList.remove('modal-inactive'); modal.classList.add('modal-active'); };
+        const closeModal = (modal) => { modal.classList.remove('modal-active'); modal.classList.add('modal-inactive'); };
+
+        async function callGemini(prompt, buttonElement) {
+            const originalText = buttonElement.innerHTML;
+            buttonElement.disabled = true;
+            buttonElement.innerHTML = `<svg class="animate-spin h-5 w-5 mr-3" viewBox="0 0 24 24"></svg>Gerando...`;
+            
+            try {
+                const apiKey = ""; 
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+                
+                const payload = {
+                    contents: [{ role: "user", parts: [{ text: prompt }] }]
+                };
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API Error: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+
+                if (result.candidates && result.candidates.length > 0) {
+                    return result.candidates[0].content.parts[0].text;
+                } else {
+                    throw new Error("Resposta da IA inválida.");
+                }
+            } catch (error) {
+                console.error("Erro ao chamar a API Gemini:", error);
+                alert(`Erro ao contatar a IA: ${error.message}`);
+                return null;
+            } finally {
+                buttonElement.disabled = false;
+                buttonElement.innerHTML = originalText;
+            }
+        }
+        
+        function render() {
+            const searchTerm = searchInput.value.toLowerCase();
+            let filteredLeads = leads.filter(lead => 
+                lead.name.toLowerCase().includes(searchTerm) || 
+                lead.contact.toLowerCase().includes(searchTerm)
+            );
+
+            if (activeFilter) {
+                if (activeFilter === 'Propostas') {
+                    filteredLeads = filteredLeads.filter(l => ['Proposta Enviada', 'Negociação', 'Fechado'].includes(l.status));
+                } else if (activeFilter === 'Fechados') {
+                    filteredLeads = filteredLeads.filter(l => l.status === 'Fechado');
+                }
+            }
+
+            if (currentView === 'list') {
+                renderListView(filteredLeads);
+            } else {
+                renderKanbanView(filteredLeads);
+            }
+            updateDashboard();
+        }
+
+        function renderListView(leadsToRender) {
+            listViewContainer.innerHTML = '';
+            if (leadsToRender.length === 0) {
+                listViewContainer.innerHTML = `<div class="text-center py-12"><i data-feather="users" class="mx-auto text-slate-400 h-12 w-12"></i><p class="mt-4 text-slate-500">Nenhum lead encontrado.</p></div>`;
+                feather.replace();
+                return;
+            }
+            leadsToRender.forEach(lead => listViewContainer.appendChild(createLeadCard(lead, 'list')));
+            feather.replace();
+        }
+
+        function renderKanbanView(leadsToRender) {
+            kanbanBoard.innerHTML = '';
+            statuses.forEach(status => {
+                const column = document.createElement('div');
+                column.id = `kanban-col-${status}`;
+                column.className = 'kanban-column bg-slate-100 rounded-lg p-3 space-y-3 border-2 border-transparent';
+                column.innerHTML = `<h3 class="font-bold text-slate-700 px-1">${status}</h3>`;
+                
+                const leadsInColumn = leadsToRender.filter(l => l.status === status);
+                leadsInColumn.forEach(lead => column.appendChild(createLeadCard(lead, 'kanban')));
+                kanbanBoard.appendChild(column);
+            });
+            feather.replace();
+        }
+
+        function createLeadCard(lead, viewType) {
+            const card = document.createElement('div');
+            card.id = `lead-${lead.id}`;
+            card.dataset.id = lead.id;
+            card.className = `kanban-card bg-white p-4 rounded-lg border border-slate-200 shadow-sm`;
+            if(viewType === 'kanban') card.draggable = true;
+
+            const reminder = lead.reminderDate && new Date() > new Date(lead.reminderDate.seconds * 1000) 
+                ? `<div class="mt-2 flex items-center text-red-500 text-xs font-bold"><i data-feather="bell" class="h-4 w-4 mr-1"></i> Follow-up necessário!</div>` 
+                : '';
+
+            card.innerHTML = `
+                <div class="flex justify-between items-start">
+                    <p class="font-bold text-slate-800">${lead.name}</p>
+                    <p class="font-bold text-emerald-600 text-sm">${formatCurrency(lead.potentialValue)}</p>
+                </div>
+                <p class="text-sm text-slate-500">${lead.contact}</p>
+                <p class="text-xs text-slate-400 mt-2">Cadastrado em: ${formatDate(lead.createdAt)}</p>
+                ${reminder}
+                <div class="mt-4 flex justify-between items-center gap-2">
+                    <div class="relative">
+                        <select data-id="${lead.id}" class="status-select appearance-none bg-slate-100 border border-slate-300 text-slate-700 py-1 pl-2 pr-8 rounded-md text-xs focus:outline-none focus:border-sky-500">
+                            ${statuses.map(s => `<option value="${s}" ${s === lead.status ? 'selected' : ''}>${s}</option>`).join('')}
+                        </select>
+                        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-700"><i data-feather="chevron-down" class="h-4 w-4"></i></div>
+                    </div>
+                    <div class="flex items-center">
+                        <button data-id="${lead.id}" class="email-btn p-2 text-slate-500 hover:text-sky-600 rounded-md" title="Gerar Email de Follow-up"><i data-feather="mail" class="h-5 w-5"></i></button>
+                        <button data-id="${lead.id}" class="notes-btn p-2 text-slate-500 hover:text-sky-600 rounded-md" title="Ver/Adicionar Notas"><i data-feather="message-square" class="h-5 w-5"></i></button>
+                        <button data-id="${lead.id}" class="delete-btn p-2 text-slate-500 hover:text-red-600 rounded-md" title="Excluir Lead"><i data-feather="trash-2" class="h-5 w-5"></i></button>
+                    </div>
+                </div>
+            `;
+            return card;
+        }
+
+        function initCharts() {
+            const chartConfigs = [
+                { id: 'leadsChart', label: 'Novos Leads' }, { id: 'proposalsChart', label: 'Propostas' },
+                { id: 'closedChart', label: 'Fechados' }, { id: 'revenueChart', label: 'Receita' }
+            ];
+            dashboardChartsContainer.innerHTML = '';
+            chartConfigs.forEach(config => {
+                const chartWrapper = document.createElement('div');
+                chartWrapper.className = 'text-center';
+                chartWrapper.innerHTML = `
+                    <div class="relative w-full aspect-square mx-auto">
+                        <canvas id="${config.id}"></canvas>
+                        <div id="${config.id}-text" class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none"></div>
+                    </div>
+                    <p class="mt-2 text-sm font-medium text-slate-600 flex items-center justify-center gap-1">${config.label} <span id="${config.id}-check" class="text-green-500 hidden"><i data-feather="check-circle" class="h-4 w-4"></i></span></p>
+                `;
+                dashboardChartsContainer.appendChild(chartWrapper);
+                const ctx = document.getElementById(config.id).getContext('2d');
+                charts[config.id] = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: { datasets: [{ data: [0, 100], backgroundColor: ['#0ea5e9', '#e0f2fe'], borderWidth: 0 }] },
+                    options: {
+                        responsive: true, cutout: '70%',
+                        plugins: { legend: { display: false }, tooltip: { enabled: true } },
+                        onHover: (event, chartElement) => { event.native.target.style.cursor = chartElement.length && config.id !== 'revenueChart' ? 'pointer' : 'default'; },
+                        onClick: (evt) => { handleChartClick(evt.chart.canvas.id); }
+                    }
+                });
+            });
+            feather.replace();
+        }
+
+        function updateDashboard() {
+            if (!goals || Object.keys(goals).length === 0) return;
+            const currentLeads = leads.length;
+            const currentProposals = leads.filter(l => ['Proposta Enviada', 'Negociação', 'Fechado'].includes(l.status)).length;
+            const currentClosed = leads.filter(l => l.status === 'Fechado').length;
+            const currentRevenue = leads.filter(l => l.status === 'Fechado').reduce((sum, l) => sum + Number(l.potentialValue), 0);
+            const dataMap = {
+                leadsChart: { current: currentLeads, target: goals.newLeadsTarget || 0 },
+                proposalsChart: { current: currentProposals, target: goals.proposalsTarget || 0 },
+                closedChart: { current: currentClosed, target: goals.closedDealsTarget || 0 },
+                revenueChart: { current: currentRevenue, target: goals.revenueTarget || 0 }
+            };
+            for (const [chartId, data] of Object.entries(dataMap)) {
+                const { current, target } = data;
+                const goalMet = target > 0 && current >= target;
+                const progress = target > 0 ? Math.min((current / target) * 100, 100) : 0;
+                if (charts[chartId]) {
+                    charts[chartId].data.datasets[0].data = [progress, 100 - progress];
+                    charts[chartId].data.datasets[0].backgroundColor = goalMet ? ['#16a34a', '#dcfce7'] : ['#0ea5e9', '#e0f2fe'];
+                    charts[chartId].update();
+                }
+                document.getElementById(`${chartId}-check`).style.display = goalMet ? 'inline' : 'none';
+                const textElement = document.getElementById(`${chartId}-text`);
+                if (textElement) {
+                    const isRevenue = chartId === 'revenueChart';
+                    textElement.innerHTML = `<span class="text-2xl font-bold ${goalMet ? 'text-green-600' : 'text-slate-800'}">${isRevenue ? formatCurrency(current).split(',')[0] : current}</span><span class="text-xs text-slate-500">de ${isRevenue ? formatCurrency(target).split(',')[0] : target}</span>`;
+                }
+            }
+        }
+
+        function updateReports() {
+            const reportsContent = document.getElementById('reports-content');
+            const closedLeads = leads.filter(l => l.status === 'Fechado');
+            const totalLeads = leads.length;
+            const conversionRate = totalLeads > 0 ? (closedLeads.length / totalLeads) * 100 : 0;
+            const avgDealValue = closedLeads.length > 0 ? closedLeads.reduce((sum, l) => sum + Number(l.potentialValue), 0) / closedLeads.length : 0;
+            const salesCycleTimes = closedLeads.filter(l => l.createdAt && l.closedAt).map(l => (l.closedAt.seconds - l.createdAt.seconds) / (60 * 60 * 24));
+            const avgSalesCycle = salesCycleTimes.length > 0 ? salesCycleTimes.reduce((a, b) => a + b, 0) / salesCycleTimes.length : 0;
+            const funnelConversion = {};
+            for (let i = 0; i < statuses.length - 2; i++) {
+                const fromStatus = statuses[i];
+                const fromCount = leads.filter(l => statuses.slice(i).includes(l.status)).length;
+                const toCount = leads.filter(l => statuses.slice(i+1).includes(l.status)).length;
+                funnelConversion[fromStatus] = fromCount > 0 ? (toCount / fromCount) * 100 : 0;
+            }
+            reportsContent.innerHTML = `
+                <div class="bg-slate-50 p-4 rounded-lg text-center"><p class="text-sm text-slate-500">Taxa de Conversão (Lead -> Fechado)</p><p class="text-3xl font-bold text-sky-600">${conversionRate.toFixed(1)}%</p></div>
+                <div class="bg-slate-50 p-4 rounded-lg text-center"><p class="text-sm text-slate-500">Ticket Médio</p><p class="text-3xl font-bold text-emerald-600">${formatCurrency(avgDealValue)}</p></div>
+                <div class="bg-slate-50 p-4 rounded-lg text-center"><p class="text-sm text-slate-500">Ciclo de Venda Médio</p><p class="text-3xl font-bold text-purple-600">${avgSalesCycle.toFixed(1)} dias</p></div>
+                <div class="bg-slate-50 p-4 rounded-lg md:col-span-2"><p class="text-sm text-slate-500 text-center mb-2">Conversão do Funil</p><div class="space-y-2">${Object.entries(funnelConversion).map(([status, rate]) => `<div class="flex items-center justify-between text-sm"><span class="text-slate-600">${status} &rarr;</span><span class="font-semibold">${rate.toFixed(1)}%</span></div><div class="w-full bg-slate-200 rounded-full h-2.5"><div class="bg-sky-500 h-2.5 rounded-full" style="width: ${rate}%"></div></div>`).join('')}</div></div>`;
+        }
+
+        function handleChartClick(chartId) {
+            const filterMap = {
+                leadsChart: { filter: 'Novos Leads', label: 'Filtrando: Todos os Leads' },
+                proposalsChart: { filter: 'Propostas', label: 'Filtrando: Propostas' },
+                closedChart: { filter: 'Fechados', label: 'Filtrando: Fechados' }
+            };
+            if (filterMap[chartId]) {
+                const newFilter = filterMap[chartId].filter;
+                if (activeFilter === newFilter) {
+                    activeFilter = null;
+                    clearFilterBtn.classList.add('hidden');
+                } else {
+                    activeFilter = newFilter;
+                    filterLabel.textContent = filterMap[chartId].label;
+                    clearFilterBtn.classList.remove('hidden');
+                }
+                render();
+            }
+        }
+
+        async function saveGoals() {
+            const newGoalsData = {
+                newLeadsTarget: Number(document.getElementById('newLeadsTarget').value) || 0,
+                proposalsTarget: Number(document.getElementById('proposalsTarget').value) || 0,
+                closedDealsTarget: Number(document.getElementById('closedDealsTarget').value) || 0,
+                revenueTarget: Number(document.getElementById('revenueTarget').value) || 0,
+            };
+            await setDoc(doc(db, `artifacts/${appId}/users/${userId}/goals/monthly`), newGoalsData);
+            alert('Metas salvas com sucesso!');
+        }
+
+        function listenToData() {
+            onSnapshot(doc(db, `artifacts/${appId}/users/${userId}/goals/monthly`), (docSnap) => {
+                if (docSnap.exists()) {
+                    goals = docSnap.data();
+                    Object.keys(goals).forEach(key => {
+                        const input = document.getElementById(key);
+                        if(input) input.value = goals[key];
+                    });
+                }
+                updateDashboard();
+            });
+            const q = query(collection(db, `artifacts/${appId}/users/${userId}/leads`), orderBy('createdAt', 'desc'));
+            onSnapshot(q, (querySnapshot) => {
+                leads = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                render();
+            });
+        }
+
+        async function handleLeadFormSubmit(e) {
+            e.preventDefault();
+            const leadData = {
+                name: document.getElementById('leadName').value,
+                contact: document.getElementById('leadContact').value,
+                phone: document.getElementById('leadPhone').value,
+                potentialValue: Number(document.getElementById('leadPotentialValue').value),
+                status: 'Lead',
+                updatedAt: serverTimestamp(),
+                createdAt: serverTimestamp()
+            };
+            await addDoc(collection(db, `artifacts/${appId}/users/${userId}/leads`), leadData);
+            closeModal(leadModal);
+        }
+
+        async function handleStatusChange(leadId, newStatus) {
+            const leadDocRef = doc(db, `artifacts/${appId}/users/${userId}/leads`, leadId);
+            const updateData = { status: newStatus, updatedAt: serverTimestamp() };
+            if (newStatus === 'Proposta Enviada') {
+                const reminderDate = new Date();
+                reminderDate.setDate(reminderDate.getDate() + 7);
+                updateData.reminderDate = reminderDate;
+            } else {
+                 updateData.reminderDate = null;
+            }
+            if (newStatus === 'Fechado') {
+                updateData.closedAt = serverTimestamp();
+            }
+            await updateDoc(leadDocRef, updateData);
+        }
+
+        async function handleDeleteLead(leadId) {
+            if (!confirm('Tem certeza que deseja excluir este lead e todas as suas notas? Esta ação é irreversível.')) return;
+            const leadDocRef = doc(db, `artifacts/${appId}/users/${userId}/leads`, leadId);
+            const notesCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/leads/${leadId}/notes`);
+            const batch = writeBatch(db);
+            const notesSnapshot = await getDocs(notesCollectionRef);
+            notesSnapshot.forEach(noteDoc => batch.delete(noteDoc.ref));
+            batch.delete(leadDocRef);
+            await batch.commit();
+        }
+
+        async function handleNotes(leadId) {
+            currentLeadIdForNotes = leadId;
+            document.getElementById('gemini-summary-container').innerHTML = '';
+            const notesHistory = document.getElementById('notes-history');
+            notesHistory.innerHTML = '<p class="text-slate-400">Carregando notas...</p>';
+            openModal(notesModal);
+            const notesCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/leads/${leadId}/notes`);
+            const q = query(notesCollectionRef, orderBy('createdAt', 'desc'));
+            onSnapshot(q, (snapshot) => {
+                notesHistory.innerHTML = '';
+                if (snapshot.empty) {
+                    notesHistory.innerHTML = '<p class="text-slate-400">Nenhuma nota adicionada ainda.</p>';
+                    return;
+                }
+                snapshot.forEach(doc => {
+                    const note = doc.data();
+                    const noteEl = document.createElement('div');
+                    noteEl.className = 'bg-slate-100 p-3 rounded-md note-item';
+                    noteEl.innerHTML = `<p class="text-slate-700">${note.text}</p><p class="text-xs text-slate-400 text-right mt-1">${formatDate(note.createdAt)}</p>`;
+                    notesHistory.appendChild(noteEl);
+                });
+            });
+        }
+
+        async function handleAddNoteSubmit(e) {
+            e.preventDefault();
+            const noteText = document.getElementById('noteText').value;
+            if (!noteText.trim() || !currentLeadIdForNotes) return;
+            const notesCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/leads/${currentLeadIdForNotes}/notes`);
+            await addDoc(notesCollectionRef, { text: noteText, createdAt: serverTimestamp() });
+            addNoteForm.reset();
+        }
+
+        async function handleGenerateSummary() {
+            const notesText = Array.from(document.querySelectorAll('#notes-history .note-item p:first-child')).map(p => p.textContent).join('\n---\n');
+            if (!notesText.trim()) {
+                alert("Não há notas para resumir.");
+                return;
+            }
+            const prompt = `Como um especialista em vendas B2B, resuma o seguinte histórico de interações com um lead em 3 pontos principais (bullet points). O resumo deve ser conciso, em português, e focado em ações, dores e o sentimento do lead:\n\n${notesText}`;
+            const summary = await callGemini(prompt, generateSummaryBtn);
+            if (summary) {
+                document.getElementById('gemini-summary-container').innerHTML = `<div class="gemini-summary p-4 rounded-md mb-4">
+                    <h4 class="font-bold text-slate-800 flex items-center gap-2">✨ Resumo da IA</h4>
+                    <p class="mt-2 text-sm text-slate-700 whitespace-pre-wrap">${summary}</p>
+                </div>`;
+            }
+        }
+
+        function handleEmailAssistant(leadId) {
+            currentLeadForEmail = leads.find(l => l.id === leadId);
+            emailOutput.value = '';
+            openModal(emailModal);
+        }
+        
+        async function handleGenerateEmail() {
+            if (!currentLeadForEmail) return;
+            const { name, status } = currentLeadForEmail;
+            const prompt = `Aja como um gestor de tráfego B2B. Gere um email de follow-up curto e amigável em português para um lead chamado "${name}". O status atual do lead é "${status}". O objetivo é reengajar o lead e movê-lo para a próxima etapa. O tom deve ser profissional, mas não robótico. Não inclua placeholders como "[Seu Nome]".`;
+            const email = await callGemini(prompt, generateEmailBtn);
+            if (email) {
+                emailOutput.value = email;
+            }
+        }
+
+        function setupEventListeners() {
+            viewToggleList.addEventListener('click', () => { currentView = 'list'; viewToggleList.classList.add('bg-white', 'shadow', 'text-sky-600'); viewToggleKanban.classList.remove('bg-white', 'shadow', 'text-sky-600'); listViewContainer.classList.remove('hidden'); kanbanViewContainer.classList.add('hidden'); render(); });
+            viewToggleKanban.addEventListener('click', () => { currentView = 'kanban'; viewToggleKanban.classList.add('bg-white', 'shadow', 'text-sky-600'); viewToggleList.classList.remove('bg-white', 'shadow', 'text-sky-600'); kanbanViewContainer.classList.remove('hidden'); listViewContainer.classList.add('hidden'); render(); });
+            saveGoalsBtn.addEventListener('click', saveGoals);
+            searchInput.addEventListener('input', render);
+            addLeadBtn.addEventListener('click', () => { leadForm.reset(); openModal(leadModal); });
+            openReportsBtn.addEventListener('click', () => { updateReports(); openModal(reportsModal); });
+            clearFilterBtn.addEventListener('click', () => { activeFilter = null; clearFilterBtn.classList.add('hidden'); render(); });
+            generateSummaryBtn.addEventListener('click', handleGenerateSummary);
+            generateEmailBtn.addEventListener('click', handleGenerateEmail);
+            copyEmailBtn.addEventListener('click', () => { emailOutput.select(); document.execCommand('copy'); alert('Email copiado!'); });
+
+            document.querySelectorAll('.modal').forEach(modal => { modal.addEventListener('click', (e) => { if (e.target === modal || e.target.closest('.close-modal-btn')) { closeModal(modal); } }); });
+            leadForm.addEventListener('submit', handleLeadFormSubmit);
+            addNoteForm.addEventListener('submit', handleAddNoteSubmit);
+
+            document.body.addEventListener('change', (e) => { if (e.target.classList.contains('status-select')) { handleStatusChange(e.target.dataset.id, e.target.value); } });
+            document.body.addEventListener('click', (e) => {
+                const deleteBtn = e.target.closest('.delete-btn'); if (deleteBtn) handleDeleteLead(deleteBtn.dataset.id);
+                const notesBtn = e.target.closest('.notes-btn'); if (notesBtn) handleNotes(notesBtn.dataset.id);
+                const emailBtn = e.target.closest('.email-btn'); if (emailBtn) handleEmailAssistant(emailBtn.dataset.id);
+            });
+
+            kanbanBoard.addEventListener('dragstart', e => { if(e.target.classList.contains('kanban-card')) { e.target.classList.add('dragging'); e.dataTransfer.setData('text/plain', e.target.id); } });
+            kanbanBoard.addEventListener('dragend', e => { if(e.target.classList.contains('kanban-card')) e.target.classList.remove('dragging'); });
+            kanbanBoard.addEventListener('dragover', e => { e.preventDefault(); const column = e.target.closest('.kanban-column'); if(column) { document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over')); column.classList.add('drag-over'); } });
+            kanbanBoard.addEventListener('dragleave', e => { const column = e.target.closest('.kanban-column'); if(column) column.classList.remove('drag-over'); });
+            kanbanBoard.addEventListener('drop', e => { e.preventDefault(); document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over')); const column = e.target.closest('.kanban-column'); if(column) { const leadCardId = e.dataTransfer.getData('text/plain'); const leadId = leadCardId.replace('lead-', ''); const newStatus = column.id.replace('kanban-col-', ''); handleStatusChange(leadId, newStatus); } });
+        }
+
+        async function main() {
+            try {
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        userIdDisplay.textContent = userId;
+                        initCharts();
+                        listenToData();
+                        setupEventListeners();
+                        feather.replace();
+                        loadingOverlay.style.display = 'none';
+                    }
+                });
+                const token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+                if (token) await signInWithCustomToken(auth, token);
+                else await signInAnonymously(auth);
+            } catch (error) {
+                console.error("Erro na inicialização:", error);
+                loadingOverlay.innerHTML = `<div class="text-center text-red-600 p-4"><p class="text-lg font-medium">Ocorreu um erro ao carregar o aplicativo.</p><p class="text-sm mt-2">${error.message}</p></div>`;
+            }
+        }
+
+        main();
+    </script>
+</body>
+</html>
