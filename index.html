@@ -119,7 +119,14 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, collection, addDoc, updateDoc, deleteDoc, serverTimestamp, query, orderBy, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const firebaseConfig = {
+  apiKey: "AIzaSyC0qztO3Kz7X1ApT4bFiT0cHO5jkce05xk",
+  authDomain: "crm-gestor.firebaseapp.com",
+  projectId: "crm-gestor",
+  storageBucket: "crm-gestor.firebasestorage.app",
+  messagingSenderId: "402277763489",
+  appId: "1:402277763489:web:1b69ff225ee440379ae3e0"
+};
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-crm-app';
         let app, db, auth, userId;
         let leads = [], goals = {}, charts = {}, currentView = 'list', currentLeadIdForNotes = null, currentLeadForEmail = null, activeFilter = null;
